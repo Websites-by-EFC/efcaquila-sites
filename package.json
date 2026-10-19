@@ -1,0 +1,51 @@
+{
+  "name": "@efcaquila/sites",
+  "version": "1.0.0",
+  "description": "Aquila's runtime for a bundled school website (Vite or any bundler): lead posting to the Aquila Edge, first-touch attribution, trial sessions, sign-up packages and hosted hand-off URLs.",
+  "keywords": [
+    "aquila",
+    "efc",
+    "leads",
+    "attribution"
+  ],
+  "homepage": "https://github.com/Websites-by-EFC/efcaquila-sites#readme",
+  "bugs": {
+    "url": "https://github.com/Websites-by-EFC/efcaquila-sites/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Websites-by-EFC/efcaquila-sites.git"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "sideEffects": false,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.5"
+  }
+}

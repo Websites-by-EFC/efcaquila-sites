@@ -1,0 +1,79 @@
+# Publish @efcaquila/sites to public npm by TRUSTED PUBLISHING (OIDC), with provenance.
+#
+# This file lives in EFC's Aquila repository at Aquila.Frontend/packages/efcaquila-sites/.github/workflows/
+# and reaches this repository (Websites-by-EFC/efcaquila-sites, a mirror of that folder) through the
+# Aquila.Templates pipeline's MirrorSitesModule job, which pushes to `main` only when package.json's
+# version changed. Edit it there, never here: the next mirror replaces this repository's tree.
+#
+# NO TOKEN. npm trusts this repository and this workflow file by name (the trusted publisher configured
+# on the package at npmjs.com); `id-token: write` lets the job mint the OIDC token npm exchanges for a
+# short-lived publish credential, and provenance is attached automatically. There is no NPM_TOKEN secret
+# and there must never be one.
+#
+# A version npm already has is SKIPPED, never re-published and never an error: the publish runs only
+# when `npm view @efcaquila/sites@<version>` finds nothing.
+name: Publish to npm
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      # Trusted publishing (the OIDC exchange) needs npm CLI 11.5.1 or later; Node 22 bundles npm 10,
+      # which would fall back to looking for a token and fail with ENEEDAUTH.
+      - name: Use npm 11.5.1 or later
+        run: |
+          npm install -g "npm@^11.5.1"
+          npm --version
+
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm test
+
+      - name: Is this version already on npm?
+        id: published
+        run: |
+          set -uo pipefail
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if out="$(npm view "$name@$version" version 2>&1)"; then
+            if [ -n "$out" ]; then
+              echo "$name@$version is already on npm: skipping the publish."
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$name@$version is not on npm: publishing."
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif echo "$out" | grep -q "E404"; then
+            echo "$name@$version is not on npm (E404): publishing."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            # Anything but a clean answer or a 404 (the registry down, say) stops here rather than guessing.
+            echo "$out"
+            echo "::error::npm view failed; not publishing."
+            exit 1
+          fi
+
+      - name: Publish (trusted publishing, provenance)
+        if: steps.published.outputs.exists == 'false'
+        run: npm publish --access public --provenance
