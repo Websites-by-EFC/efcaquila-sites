@@ -104,6 +104,20 @@ const feed = await getPackagesFeed(); // PackageOption[] | null
   reshapes the site (a nav entry), so an outage does not rewrite the navigation.
 - Every `bookUrl` and package `url` comes back already decorated with the visitor's attribution bag.
 
+### The whole timetable
+
+```ts
+import { getSessions } from "@efcaquila/sites";
+
+const sessions = await getSessions({ location }); // SessionSlot[]; [] on any failure
+```
+
+`getSessions` reads `/embed/sessions`: every class of the next 14 days that is not invite-only, plus every class offered to trials (pooled
+siblings included), each one the `AvailabilitySlot` shape plus `bookable`. Draw every slot; give a Book
+control only to a `bookable` one, whose `bookUrl` is decorated like any other. A slot with
+`bookable: false` has no `bookUrl` and is a class to list, not to book. `getAvailability` is exactly the
+bookable subset: keep it for anything that only offers things to book.
+
 ## Hand-off links
 
 Render a served `url` / `bookUrl` verbatim and never rebuild it from parts. Resolve it on the click with
@@ -158,8 +172,11 @@ go to EFC, not to the mirror.
 ## Building this package (EFC)
 
 `npm run build` emits `dist/`; `npm test` runs the vitest suite. Inside Aquila the three website template
-packages take it as `file:../efcaquila-sites` and bundle it, so **any change to `src/` changes all three
-template artifacts' bytes** and bumps their versions in `Aquila.Services/Website/TemplateRegistry.cs` in
-the same commit. Bumping `version` here is what publishes: the Aquila.Templates pipeline mirrors the
+packages take it as `file:../efcaquila-sites` and bundle it, so **a change to `src/` can change every
+template artifact's bytes**, and each template whose built artifact changed bumps its version in
+`Aquila.Services/Website/TemplateRegistry.cs` in the same commit. Build all three and compare: the
+templates pipeline refuses a registered version whose build differs from its published folder. (A new
+export a template does not import is tree-shaken out of that template's build, as `getSessions` is out of
+school's in 1.1.0.) Bumping `version` here is what publishes: the Aquila.Templates pipeline mirrors the
 folder to GitHub on a version change, and the mirror's `.github/workflows/publish.yml` publishes it,
 skipping a version npm already has.

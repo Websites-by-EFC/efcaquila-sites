@@ -501,3 +501,45 @@ export async function getAvailability(
         return [];
     }
 }
+
+/** One session occurrence on the Location's timetable, as served by the Edge's `/embed/sessions`:
+ *  the {@link AvailabilitySlot} shape plus `bookable`. The feed lists EVERY session that is not
+ *  invite-only over the next 14 days (with an hour's notice), pooled siblings included; the
+ *  availability feed is exactly its bookable subset. A slot with `bookable: false` is a class to
+ *  list, not to book, and carries no `bookUrl`: draw it with no Book control. */
+export interface SessionSlot extends AvailabilitySlot {
+    /** `true` when a trial space is open on this occurrence and `bookUrl` books it. Always present
+     *  on the wire; read here as `false` unless it is exactly `true`. */
+    bookable: boolean;
+}
+
+/**
+ * Fetch the site's WHOLE timetable from the Edge (`GET /embed/sessions?site=…`), every class with
+ * the trial-bookable ones marked `bookable`. The same contract as {@link getAvailability}: resolves
+ * `[]` on ANY failure, `location` names one Location of a site that fronts several, and every
+ * served `bookUrl` comes back decorated with the visitor's attribution bag ({@link decorateUrl}).
+ *
+ * Use it for a timetable that lists every class; use {@link getAvailability} where only bookable
+ * slots belong (the sessions offered under an enquiry's confirmation).
+ */
+export async function getSessions(options: { signal?: AbortSignal; location?: string } = {}): Promise<SessionSlot[]> {
+    if (!config) return [];
+    try {
+        const url =
+            `${config.edge.replace(/\/+$/, "")}/embed/sessions?site=${encodeURIComponent(config.site)}` +
+            (options.location ? `&location=${encodeURIComponent(options.location)}` : "");
+        const response = await fetch(url, { signal: options.signal });
+        if (!response.ok) return [];
+        const body = (await response.json()) as unknown;
+        if (!Array.isArray(body)) return [];
+        return (body as SessionSlot[])
+            .filter((slot) => slot && typeof slot === "object")
+            .map((slot) => ({
+                ...slot,
+                bookable: slot.bookable === true,
+                ...(slot.bookUrl ? { bookUrl: decorateUrl(slot.bookUrl) } : {}),
+            }));
+    } catch {
+        return [];
+    }
+}

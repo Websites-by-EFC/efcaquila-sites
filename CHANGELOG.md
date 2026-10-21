@@ -2,6 +2,15 @@
 
 `@efcaquila/sites` follows semver. Newest first.
 
+## 1.1.0 (2026-10-21)
+
+- **`getSessions({ location?, signal? })`** reads the Edge's `/embed/sessions`: the Location's whole
+  timetable for the next 14 days (every session that is not invite-only, plus every session offered to trials, pooled siblings included), each
+  slot a **`SessionSlot`**, the `AvailabilitySlot` shape plus `bookable`. A bookable slot carries its
+  decorated `bookUrl`; a listed-only one carries none and is drawn with no Book control. Same contract as
+  `getAvailability`: `[]` on any failure, `&location=` only when named. The availability feed is exactly
+  the bookable subset, and stays the read for anything that is only for booking.
+
 ## 1.0.0 (2026-10-19)
 
 The first version under the v1 contract and the first by trusted publishing, from

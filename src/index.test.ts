@@ -5,6 +5,7 @@ import {
     getPackages,
     getPackagesFeed,
     getAvailability,
+    getSessions,
     getAttribution,
     captureFirstTouch,
     decorateUrl,
@@ -872,5 +873,129 @@ describe("getAvailability", () => {
             vi.fn(() => Promise.resolve(new Response(JSON.stringify({ nope: true }), { status: 200 })))
         );
         expect(await getAvailability()).toEqual([]);
+    });
+});
+
+describe("getSessions", () => {
+    it("GETs /embed/sessions with the site token, and &location= only when one is named", async () => {
+        // The timetable read builds its URL exactly as the availability read does, against its own path.
+        configure({ edge: "https://edge.example.com/", site: "tok123" });
+        const calls: string[] = [];
+        vi.stubGlobal(
+            "fetch",
+            vi.fn((url: string) => {
+                calls.push(url);
+                return Promise.resolve(new Response("[]", { status: 200 }));
+            })
+        );
+
+        await getSessions();
+        await getSessions({ location: "3f2504e0-4f89-11d3-9a0c-0305e82c3301" });
+        await getSessions({ location: "" });
+        await getSessions({ location: "a b&c" });
+
+        expect(calls).toEqual([
+            "https://edge.example.com/embed/sessions?site=tok123",
+            "https://edge.example.com/embed/sessions?site=tok123&location=3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+            "https://edge.example.com/embed/sessions?site=tok123",
+            "https://edge.example.com/embed/sessions?site=tok123&location=a%20b%26c",
+        ]);
+    });
+
+    it("hands every slot back with its bookable flag, decorating only a served bookUrl", async () => {
+        window.history.replaceState(null, "", "/?utm_source=google&gclid=abc123");
+        captureFirstTouch();
+        configure({ edge: "https://edge.example.com/", site: "tok123" });
+        const served = [
+            {
+                startsAt: "2026-07-01T17:30:00",
+                sessionId: "s2",
+                name: "Juniors",
+                start: "17:30",
+                end: "18:30",
+                bookingFee: 0,
+                bookUrl: "https://forms.example.com/book?token=abc",
+                venue: { name: "Riverside Dojo" },
+                bookable: true,
+            },
+            {
+                startsAt: "2026-07-01T19:00:00",
+                sessionId: "s3",
+                name: "Adults",
+                start: "19:00",
+                end: "20:00",
+                bookUrl: null,
+                venue: { name: "Harbour Academy" },
+                pooled: true,
+                bookable: false,
+            },
+        ];
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() => Promise.resolve(new Response(JSON.stringify(served), { status: 200 })))
+        );
+
+        const slots = await getSessions();
+        expect(slots.map((slot) => ({ ...slot, bookUrl: null }))).toEqual(
+            served.map((slot) => ({ ...slot, bookUrl: null }))
+        );
+        const decorated = new URL(slots[0].bookUrl!);
+        expect(decorated.origin + decorated.pathname).toBe("https://forms.example.com/book");
+        expect(decorated.searchParams.get("token")).toBe("abc");
+        expect(decorated.searchParams.get("gclid")).toBe("abc123");
+        expect(decorated.searchParams.get("efc_tags"), "the consent attestation is the click's job").toBeNull();
+        expect(slots[1].bookUrl, "a listed-only class is never given a link").toBeNull();
+        expect(slots[1].bookable).toBe(false);
+        expect(slots[1].pooled).toBe(true);
+    });
+
+    it("reads a missing or non-boolean bookable as false", async () => {
+        configure({ edge: "https://edge.example.com", site: "tok123" });
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() =>
+                Promise.resolve(
+                    new Response(
+                        JSON.stringify([
+                            { sessionId: "a" },
+                            { sessionId: "b", bookable: "true" },
+                            { sessionId: "c", bookable: true },
+                        ]),
+                        { status: 200 }
+                    )
+                )
+            )
+        );
+        expect((await getSessions()).map((slot) => slot.bookable)).toEqual([false, false, true]);
+    });
+
+    it("returns [] on a network failure, a non-2xx response and a non-array body", async () => {
+        configure({ edge: "https://edge.example.com", site: "tok123" });
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() => Promise.reject(new Error("offline")))
+        );
+        expect(await getSessions()).toEqual([]);
+
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() => Promise.resolve(new Response("oops", { status: 502 })))
+        );
+        expect(await getSessions()).toEqual([]);
+
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() => Promise.resolve(new Response(JSON.stringify({ nope: true }), { status: 200 })))
+        );
+        expect(await getSessions()).toEqual([]);
+    });
+
+    it("returns [] before configure", async () => {
+        vi.resetModules();
+        const fresh = await import("./index");
+        const fetchSpy = vi.fn();
+        vi.stubGlobal("fetch", fetchSpy);
+        expect(await fresh.getSessions()).toEqual([]);
+        expect(fetchSpy).not.toHaveBeenCalled();
     });
 });

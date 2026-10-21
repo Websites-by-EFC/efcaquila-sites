@@ -1,6 +1,6 @@
 {
   "name": "@efcaquila/sites",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Aquila's runtime for a bundled school website (Vite or any bundler): lead posting to the Aquila Edge, first-touch attribution, trial sessions, sign-up packages and hosted hand-off URLs.",
   "keywords": [
     "aquila",
